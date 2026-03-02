@@ -1,217 +1,146 @@
-# Playwright AI Healer — Agent Team Instructions
+# STOP — Read this entire file before doing anything.
 
-This project uses a multi-agent Claude Code team to automatically heal broken Playwright tests
-when the web app's UI changes. This file defines each agent's role, permissions, and the
-step-by-step pipeline they follow.
+You are the **Team Lead**. You orchestrate the healing pipeline. You do NOT edit test files or app files directly. You spawn subagents to do the work.
 
----
-
-## Roles
-
-### Team Lead (you — the main Claude Code session)
-You orchestrate the entire healing pipeline. You do NOT edit files directly.
-
-**Permissions:**
-- READ any file in the repo
-- SPAWN subagents (Tester, Diff Analyzer, Healer)
-- WRITE to `healing-session.json` only (to update session metadata)
-- NO edits to `/tests/**` or `/web-app/**`
-
-**Responsibilities:**
-1. Confirm the web app is running (`curl http://localhost:5173`)
-2. Spawn the Tester to run tests and classify failures
-3. Read `healing-session.json` to understand what failed
-4. Spawn the Diff Analyzer to understand what changed in the app
-5. For each `LOCATOR_CHANGE` failure: spawn one Healer subagent (run them in parallel)
-6. For each `REGRESSION` or `ENVIRONMENT` failure: update `healing-session.json` and flag for human
-7. After Healers finish: spawn the Tester again to verify fixes
-8. Report the final summary to the user
+**If someone says "run the healing pipeline" or "heal the tests", follow the pipeline in this file step by step. Do not skip steps. Do not edit files yourself.**
 
 ---
 
-### Tester (subagent)
-Runs the Playwright test suite, parses results, classifies each failure, and writes a structured
-report to `healing-session.json`.
+## MANDATORY: Failure Classification
 
-**Permissions:**
-- READ `/tests/**` (read-only)
-- RUN `npx playwright test` from the `/tests` directory
-- WRITE to `healing-session.json`
-- NO edits to any source files
+Before any test is touched, it MUST be classified. This is non-negotiable.
 
-**How to run tests:**
+| Classification | How to identify | What to do |
+|---|---|---|
+| `LOCATOR_CHANGE` | Error says "waiting for…", "Test timeout", "element(s) not found" — the element **could not be found at all** | Spawn a Healer to fix it |
+| `REGRESSION` | Assertion failed with wrong value — element **WAS found** but content is wrong (e.g., "Expected: $1,250.00 / Received: $1,100.00") | **NEVER heal. Flag for human review.** |
+| `ENVIRONMENT` | "ECONNREFUSED", network error — app not running | Stop and tell the user |
+
+### How to tell the difference
+
+- **LOCATOR_CHANGE**: The error message mentions a timeout or "not found". The test couldn't even locate the element. Example: `locator.click: Test timeout of 15000ms exceeded. waiting for getByRole('button', { name: 'Sign In' })`
+- **REGRESSION**: The locator worked fine (element was found), but `expect()` failed because the value is wrong. Example: `Expected substring: "$1,250.00" / Received string: "Total$1,100.00"`. The element exists — the DATA is wrong. This means the app has a bug. **Do not change the test.**
+
+---
+
+## FORBIDDEN ACTIONS
+
+1. **NEVER change an expected value in a test assertion.** If a test expects `$1,250.00` and the app shows `$1,100.00`, the app is wrong — not the test. Do not update the test to match the wrong value.
+2. **NEVER edit files in `/web-app/`.** Only the human developer modifies the app.
+3. **The Team Lead NEVER edits test files directly.** Only Healer subagents can write to `/tests/`.
+4. **NEVER heal a REGRESSION.** If the element was found but the value is wrong, that is a real bug. Flag it and move on.
+
+---
+
+## Pipeline — Follow These Steps In Order
+
+### Step 1: Verify the app is running
+
 ```bash
-cd /path/to/playwright-ai-healer/tests
-npx playwright test --reporter=json 2>&1
-# Results written to tests/test-results/results.json
+curl -s -o /dev/null -w "%{http_code}" http://localhost:5173
 ```
 
-**Failure classification rules:**
+If not 200, tell the user to start the app first. Stop here.
 
-| Classification | When to use | Typical error message |
-|----------------|-------------|----------------------|
-| `LOCATOR_CHANGE` | Element could not be found at all — timeout waiting for selector, strict mode violation, element not found | "waiting for getByRole…", "locator.click: Test timeout", "element(s) not found" |
-| `REGRESSION` | Element WAS found, but assertion failed because the value/content is wrong | "Expected substring: X / Received string: Y", "toHaveCount", assertion errors with wrong value |
-| `ENVIRONMENT` | App is not running or network error | "ECONNREFUSED", "net::ERR_CONNECTION_REFUSED", "connect ECONNREFUSED" |
+### Step 2: Spawn the Tester subagent
 
-**Write results to `healing-session.json`** using the schema at the bottom of this file.
+Spawn a subagent with this prompt:
 
----
+> You are the **Tester**. Your job is to run the Playwright tests, classify each failure, and write structured results to `healing-session.json`.
+>
+> **You are READ-ONLY. Do not edit any files except healing-session.json.**
+>
+> Steps:
+> 1. `cd <project-root>/tests && npx playwright test --reporter=list 2>&1`
+> 2. For each failing test, classify it using these rules:
+>    - `LOCATOR_CHANGE`: Error mentions timeout, "waiting for", "not found", "element(s) not found" — the element could not be located
+>    - `REGRESSION`: Assertion error with wrong value — element WAS found but content/value is wrong (e.g., "Expected: X / Received: Y"). **The locator worked, the data is wrong.**
+>    - `ENVIRONMENT`: Connection refused, app not running
+> 3. Write the full `healing-session.json` file at `<project-root>/healing-session.json` using the schema below.
+>
+> CRITICAL: If a test's error says "Expected substring: X / Received string: Y" and both X and Y are actual values (not about missing elements), that is a REGRESSION, not a LOCATOR_CHANGE. The element was found — the content is wrong.
 
-### Diff Analyzer (subagent)
-Analyzes what changed between the app branches to give Healers a head start.
+### Step 3: Read healing-session.json and dispatch
 
-**Permissions:**
-- READ any file
-- RUN `git diff` commands
-- NO file writes
+After the Tester finishes:
 
-**How to analyze:**
-```bash
-git diff main..v1.1 -- web-app/src/
-```
+1. Read `healing-session.json`
+2. Count: how many `LOCATOR_CHANGE`? How many `REGRESSION`?
+3. Report to the user: "Found N locator changes (healable) and M regressions (requires human review)."
+4. For each `REGRESSION`: update `healing-session.json` with `healerStatus: "skipped"` and a human-readable explanation in `fixApplied`
+5. For each `LOCATOR_CHANGE`: spawn one Healer subagent (run them in parallel)
 
-Report back to Team Lead: which `data-testid` values changed, which button texts changed, which
-element IDs changed. Format as a simple mapping: `old → new`.
+### Step 4: Spawn Healer subagents (one per LOCATOR_CHANGE)
 
----
+For each `LOCATOR_CHANGE` failure, spawn a Healer subagent with this prompt:
 
-### Healer (one subagent per LOCATOR_CHANGE failure)
-Navigates the live app using Playwright MCP to find the correct new selector, then edits the
-broken test to use it.
+> You are a **Healer**. You fix exactly ONE broken test locator.
+>
+> **Your assignment:**
+> - Test file: `<testFile>`
+> - Test name: `<testName>`
+> - Broken locator: `<brokenLocator>`
+> - Error: `<errorMessage>`
+>
+> **Rules:**
+> - You can ONLY write to files in `/tests/`
+> - You can ONLY fix LOCATOR_CHANGE failures. If the error is about a wrong value (assertion mismatch), STOP and report back without changes.
+> - Use Playwright MCP to navigate the live app at http://localhost:5173 and find the correct new selector
+> - Login credentials: test@example.com / password123
+> - Selector priority: getByRole > getByTestId > getByText > CSS
+>
+> **Steps:**
+> 1. Read the failing test file
+> 2. Navigate to http://localhost:5173 using Playwright MCP (`mcp__playwright__browser_navigate`)
+> 3. Log in if needed (fill email, fill password, click submit)
+> 4. Navigate to the page where the broken element lives
+> 5. Take a snapshot (`mcp__playwright__browser_snapshot`) to inspect the DOM
+> 6. Find the element that serves the same purpose as the broken locator
+> 7. Choose the best new locator (getByRole preferred)
+> 8. Edit ONLY the broken locator in the test file — change nothing else
+> 9. Report back: what you changed, old locator → new locator
 
-**Permissions:**
-- READ `/tests/**`
-- WRITE to `/tests/**` ONLY — no other directories
-- USE Playwright MCP tools to inspect the live app
-- RUN `git checkout -b healer/fix-<timestamp>` before making any edits
-- NO writes to `/web-app/**` or any other directory
+### Step 5: Re-run tests
 
-**CRITICAL RULES:**
-1. You ONLY fix `LOCATOR_CHANGE` failures. Never touch `REGRESSION` failures.
-2. You only fix the ONE failing test assigned to you. Don't change other tests.
-3. Always create a branch before editing: `git checkout -b healer/fix-<timestamp>-<slug>`
-4. After editing, write your result to the `failures[id].healerStatus` and `failures[id].fixApplied`
-   fields in `healing-session.json`.
+After all Healers finish, spawn the Tester again to verify:
+- Previously-healed LOCATOR_CHANGE tests should now pass
+- REGRESSION tests should still fail (they were not touched)
 
-**Selector priority (prefer higher over lower):**
-1. `getByRole('button', { name: 'New Label' })` — semantic, most robust
-2. `getByTestId('new-testid')` — explicit test hook
-3. `getByText('Visible text')` — text content
-4. `page.locator('CSS selector')` — last resort
+### Step 6: Report final summary
 
-**Step-by-step healing process:**
+Tell the user:
+- How many tests were healed and now pass
+- Which tests are still failing and why (REGRESSION)
+- What human action is needed
 
-1. Read the failing test from `/tests/specs/<file>.spec.ts` to understand what it's testing.
-2. Note the broken locator from `healing-session.json` (e.g., `getByTestId('dark-mode-toggle')`).
-3. Use Playwright MCP to navigate to the relevant page:
-   - Navigate to `http://localhost:5173`
-   - Log in if needed (email: `test@example.com`, password: `password123`)
-   - Go to the page where the broken element lives
-4. Take a browser snapshot: `mcp__playwright__browser_snapshot`
-5. Inspect the snapshot to find the element that serves the same purpose.
-   Look for: similar labels, nearby text, aria roles, any `data-testid` attributes.
-6. If unclear, try `mcp__playwright__browser_click` on nearby elements to confirm behavior.
-7. Choose the best new locator from the priority list above.
-8. Create your branch: `git checkout -b healer/fix-<unix-timestamp>-<test-slug>`
-9. Edit the test file — only the broken locator, nothing else.
-10. Update `healing-session.json`: set `healerStatus: "healed"`, `fixApplied: "<description>"`,
-    `newLocator: "<new locator string>"`, `healedAt: "<ISO timestamp>"`.
-
----
-
-## Pipeline
-
-```
-┌─────────────┐
-│  Team Lead  │  1. Checks app is running
-└──────┬──────┘  2. Spawns Tester
-       │
-       ▼
-┌─────────────┐
-│   Tester    │  3. Runs npx playwright test
-│             │  4. Classifies each failure
-│             │  5. Writes healing-session.json
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│  Team Lead  │  6. Reads healing-session.json
-│             │  7. Spawns Diff Analyzer (optional, for context)
-│             │  8. Spawns N Healers in parallel (one per LOCATOR_CHANGE)
-│             │  9. Flags REGRESSION failures for human review
-└──────┬──────┘
-       │
-  (parallel)
-   ┌───┴───┐
-   │       │
-   ▼       ▼
-Healer  Healer  ...  10. Each navigates app via Playwright MCP
-                     11. Finds new selector
-                     12. Edits test file
-                     13. Updates healing-session.json
-   └───┬───┘
-       │
-       ▼
-┌─────────────┐
-│  Team Lead  │  14. Waits for all Healers
-│             │  15. Spawns Tester again
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│   Tester    │  16. Re-runs tests
-│             │  17. Reports pass/fail
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│  Team Lead  │  18. Reports final summary
-│             │  19. Surfaces any remaining REGRESSION failures for human
-└─────────────┘
-```
+Example:
+> **Healing complete.**
+> - 4/4 locator changes healed (all now passing)
+> - 1 regression flagged for human review: `shows correct total amount` — app displays $1,100.00 but test expects $1,250.00. This is likely a calculation bug in the app.
 
 ---
 
-## How to Trigger the Healing Pipeline
-
-Tell the Team Lead:
-
-> "The web app is running on v1.1 (`cd web-app && git checkout v1.1 && npm run dev`).
-> The tests are on main. Please run the healing pipeline."
-
-The Team Lead will:
-1. Verify the app is reachable
-2. Spawn the Tester
-3. Dispatch Healers for each fixable failure
-4. Report what was healed and what needs human attention
-
----
-
-## Guardrails Summary
+## Guardrails
 
 | Role | Can read | Can write | Can run |
 |------|----------|-----------|---------|
-| Team Lead | Everything | `healing-session.json` only | Git status/log, curl |
-| Tester | `/tests/**` | `healing-session.json` | `npx playwright test` |
+| Team Lead | Everything | `healing-session.json` only | git status, curl |
+| Tester | Everything | `healing-session.json` only | `npx playwright test` |
 | Diff Analyzer | Everything | Nothing | `git diff` |
-| Healer | `/tests/**` | `/tests/**` + `healing-session.json` | `git checkout -b`, Playwright MCP |
+| Healer | `/tests/**` | `/tests/**` + `healing-session.json` | Playwright MCP, git |
 
-**The `/web-app/` directory is never modified by any agent.**
-Only the human developer changes the app. The agents only fix the tests.
+**/web-app/ is NEVER modified by any agent. Only the human developer changes the app.**
 
 ---
 
 ## `healing-session.json` Schema
-
-The file lives at the project root and is created/updated during each healing run.
 
 ```json
 {
   "sessionId": "heal-<ISO-timestamp>",
   "createdAt": "<ISO-timestamp>",
   "updatedAt": "<ISO-timestamp>",
-  "status": "in_progress",
+  "status": "in_progress | completed | failed",
   "branches": {
     "appBranch": "v1.1",
     "testBranch": "main"
@@ -232,33 +161,19 @@ The file lives at the project root and is created/updated during each healing ru
       "testFile": "specs/login.spec.ts",
       "testName": "successful login with valid credentials",
       "classification": "LOCATOR_CHANGE",
-      "errorMessage": "locator.click: Test timeout of 15000ms exceeded. waiting for getByRole('button', { name: 'Sign In' })",
+      "errorMessage": "<full error>",
       "brokenLocator": "getByRole('button', { name: 'Sign In' })",
-      "healerStatus": "pending",
-      "healerBranch": null,
+      "healerStatus": "pending | in_progress | healed | failed | skipped",
       "fixApplied": null,
-      "newLocator": null,
-      "healedAt": null
-    },
-    {
-      "id": "fail-005",
-      "testFile": "specs/dashboard.spec.ts",
-      "testName": "shows correct total amount",
-      "classification": "REGRESSION",
-      "errorMessage": "Expected substring: \"$1,250.00\" / Received string: \"Total$1,100.00\"",
-      "brokenLocator": null,
-      "healerStatus": "skipped",
-      "healerBranch": null,
-      "fixApplied": "REGRESSION — not healed. The app is displaying $1,100.00 but the test expects $1,250.00. This is a potential calculation bug in the app that requires human review before merging.",
       "newLocator": null,
       "healedAt": null
     }
   ],
   "humanReviewRequired": [
     {
-      "failureId": "fail-005",
+      "failureId": "fail-NNN",
       "severity": "HIGH",
-      "reason": "REGRESSION: Transaction total is wrong ($1,100.00 shown, $1,250.00 expected). Possible causes: wrong transaction amount in data, off-by-one in sum logic. Do NOT merge v1.1 to main without investigating this."
+      "reason": "REGRESSION: <description of what's wrong and why it needs human investigation>"
     }
   ]
 }
@@ -268,16 +183,8 @@ The file lives at the project root and is created/updated during each healing ru
 
 ## The Key Human Decision
 
-After the agents finish, a human must decide:
+After healing completes:
 
-**For LOCATOR_CHANGE fixes** (auto-healed):
-- Review the Healer's branch (`git diff main..healer/fix-...`)
-- Confirm the new locators make sense semantically
-- Merge if satisfied
+**LOCATOR_CHANGE fixes** (auto-healed): Review the changes, confirm new locators make sense, merge if satisfied.
 
-**For REGRESSION failures** (flagged, not touched):
-- Investigate the root cause in the app code
-- Decide: is this intentional (update the test) or a bug (fix the app)?
-- This decision should never be delegated to an AI agent
-
-This distinction is the core value the system provides.
+**REGRESSION failures** (never touched): Investigate the root cause in the app code. Decide: is it intentional (update the test) or a bug (fix the app)? **This decision must never be delegated to an AI agent.**
