@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+/tests/node_modules/
+
+# OS
+.DS_Store
