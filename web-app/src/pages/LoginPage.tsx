@@ -73,10 +73,10 @@ export default function LoginPage({ onLogin }: Props) {
 
           <button
             type="submit"
-            data-testid="login-submit"
+            data-testid="auth-submit-btn"
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded transition-colors"
           >
-            Sign In
+            Log In
           </button>
         </form>
       </div>

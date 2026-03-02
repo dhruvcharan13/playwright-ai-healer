@@ -41,7 +41,7 @@ export default function SettingsPage({ user, onNavigate, onSignOut }: Props) {
               <input
                 id="dark-mode-toggle"
                 type="checkbox"
-                data-testid="dark-mode-toggle"
+                data-testid="theme-toggle"
                 checked={darkMode}
                 onChange={e => setDarkMode(e.target.checked)}
                 className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -86,10 +86,10 @@ export default function SettingsPage({ user, onNavigate, onSignOut }: Props) {
           <div className="mt-4 flex justify-end">
             <button
               type="submit"
-              data-testid="save-settings"
+              data-testid="settings-save-btn"
               className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded transition-colors"
             >
-              Save Changes
+              Save
             </button>
           </div>
         </form>
