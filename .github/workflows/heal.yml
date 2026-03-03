@@ -1,0 +1,64 @@
+name: Test & Heal
+
+on:
+  pull_request:
+    branches: [main]
+    paths: [web-app/**]
+
+jobs:
+  test-and-heal:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install web-app dependencies
+        run: cd web-app && npm ci
+
+      - name: Install test dependencies
+        run: cd tests && npm ci
+
+      - name: Install Playwright browsers
+        run: cd tests && npx playwright install chromium --with-deps
+
+      - name: Start web app
+        run: cd web-app && npm run dev &
+
+      - name: Wait for app to be ready
+        run: npx wait-on http://localhost:5173 --timeout 30000
+
+      - name: Run Playwright tests
+        id: test
+        run: cd tests && npx playwright test --reporter=list 2>&1 | tee test-output.txt
+        continue-on-error: true
+
+      - name: Tests passed — no healing needed
+        if: steps.test.outcome == 'success'
+        run: echo "All 8 tests passed. No healing needed."
+
+      - name: Tests failed — run healing pipeline
+        if: steps.test.outcome == 'failure'
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: claude-opus-4-6
+          allowed_tools: "Bash,Read,Write,Edit,Glob,Grep,Agent"
+          prompt: |
+            The web app is running at http://localhost:5173 on the PR branch.
+            Tests are failing. Run the healing pipeline as defined in CLAUDE.md.
+
+            Project root: ${{ github.workspace }}
+            PR base branch: ${{ github.base_ref }}
+            PR head branch: ${{ github.head_ref }}
+
+            Follow the Team Lead Dispatch Logic in CLAUDE.md exactly.
