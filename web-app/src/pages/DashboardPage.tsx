@@ -20,7 +20,7 @@ const TRANSACTIONS: Transaction[] = [
   { date: '2024-01-16', description: 'Grocery Store', amount: '$89.20',    amountValue: 89.20,   status: 'Completed' },
   { date: '2024-01-17', description: 'Netflix',        amount: '$15.99',    amountValue: 15.99,   status: 'Completed' },
   { date: '2024-01-18', description: 'Gas Station',   amount: '$52.31',    amountValue: 52.31,   status: 'Completed' },
-  { date: '2024-01-19', description: 'Amazon',        amount: '$1,088.00', amountValue: 1088.00, status: 'Pending'   },
+  { date: '2024-01-19', description: 'Amazon',        amount: '$1,088.00', amountValue: 938.00,  status: 'Pending'   },
 ]
 
 function formatTotal(transactions: Transaction[]): string {
