@@ -8,7 +8,7 @@ test.describe('Login', () => {
     await page.getByTestId('password-input').fill('password123')
 
     // Explicitly assert the button by role+name — this locator breaks on v1.1 (button says "Log In")
-    await page.getByRole('button', { name: 'Sign In' }).click()
+    await page.getByRole('button', { name: 'Log In' }).click()
 
     await expect(page.getByText('Welcome back')).toBeVisible()
   })
@@ -20,7 +20,7 @@ test.describe('Login', () => {
     await page.getByTestId('password-input').fill('wrongpassword')
 
     // Same locator — breaks on v1.1
-    await page.getByRole('button', { name: 'Sign In' }).click()
+    await page.getByRole('button', { name: 'Log In' }).click()
 
     await expect(page.getByTestId('login-error')).toBeVisible()
   })
