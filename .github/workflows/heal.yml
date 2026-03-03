@@ -11,6 +11,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -55,7 +56,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           model: claude-opus-4-6
           allowed_tools: "Bash,Read,Write,Edit,Glob,Grep,Agent"
-          prompt: |
+          direct_prompt: |
             The web app is running at http://localhost:5173 on the PR branch.
             Tests are failing. Run the healing pipeline as defined in CLAUDE.md.
 
