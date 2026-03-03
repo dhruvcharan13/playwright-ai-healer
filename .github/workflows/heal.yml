@@ -39,8 +39,10 @@ jobs:
 
       - name: Run Playwright tests
         id: test
-        run: cd tests && npx playwright test --reporter=list 2>&1 | tee test-output.txt
         continue-on-error: true
+        run: |
+          set -o pipefail
+          cd tests && npx playwright test --reporter=list 2>&1 | tee test-output.txt
 
       - name: Tests passed — no healing needed
         if: steps.test.outcome == 'success'
