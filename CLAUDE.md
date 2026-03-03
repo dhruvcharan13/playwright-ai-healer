@@ -199,35 +199,34 @@ PARAMS:
 
 PERMISSIONS:
   read:  {{PROJECT_ROOT}}/tests/**
+         {{PROJECT_ROOT}}/web-app/src/**  (read-only, to find new selectors)
   write: {{PROJECT_ROOT}}/tests/specs/**
          {{PROJECT_ROOT}}/healing-session.json
-  run:   Playwright MCP tools only
-  NO git commands — Team Lead handles branching/committing
+  run:   Bash (read-only commands), grep, git diff
+  NO git commands that modify state — Team Lead handles branching/committing
 
 GUARDS — check BEFORE doing anything:
   1. If CLASSIFICATION ≠ "LOCATOR_CHANGE" → STOP. Return { action: "refused" }
   2. If ERROR_MESSAGE matches /Expected.*Received/ → STOP. Return { action: "refused", reason: "regression" }
 
-NAVIGATION — reach TARGET_PAGE:
-  login:     mcp__playwright__browser_navigate → APP_URL
-  dashboard: navigate → APP_URL, fill email "test@example.com", fill password "password123", click submit, snapshot
-  settings:  (dashboard steps), then click "Settings" button, snapshot
-
 SELECTOR PRIORITY (use first that works):
   1. getByRole  2. getByTestId  3. getByLabel  4. getByText  5. locator (CSS)
 
 PROCEDURE:
-  1. Read {{PROJECT_ROOT}}/tests/{{TEST_FILE}}
-  2. Navigate to TARGET_PAGE using NAVIGATION above
-  3. mcp__playwright__browser_snapshot
-  4. Find element matching intent of BROKEN_LOCATOR
-  5. Pick best selector per SELECTOR PRIORITY
-  6. Edit ONLY the line with BROKEN_LOCATOR in TEST_FILE — nothing else
-  7. Update healing-session.json:
+  1. Read {{PROJECT_ROOT}}/tests/{{TEST_FILE}} to understand what the test does
+  2. Read the corresponding app source file to find the new selector:
+     login    → {{PROJECT_ROOT}}/web-app/src/pages/LoginPage.tsx
+     dashboard → {{PROJECT_ROOT}}/web-app/src/pages/DashboardPage.tsx
+     settings  → {{PROJECT_ROOT}}/web-app/src/pages/SettingsPage.tsx
+  3. Search for the element that serves the same purpose as BROKEN_LOCATOR
+  4. Pick best new selector per SELECTOR PRIORITY
+  5. Edit ONLY the line with BROKEN_LOCATOR in TEST_FILE — nothing else
+  6. Update healing-session.json:
      failures[FAILURE_ID].healerStatus = "healed"
      failures[FAILURE_ID].newLocator = "<new selector>"
      failures[FAILURE_ID].fixApplied = "<old> → <new>"
      failures[FAILURE_ID].healedAt = "<ISO timestamp>"
+  7. Return result immediately — do not run tests (Team Lead handles verification)
 
 RETURN:
   {
@@ -376,7 +375,7 @@ Full details in `healing-session.json` at the project root.
 | Team Lead | **opus** | Everything | `healing-session.json` only | curl, git, gh pr create |
 | Tester | sonnet | Everything | `healing-session.json` only | `npx playwright test` |
 | Diff Analyzer | sonnet | Everything | Nothing | `git diff` |
-| Healer | sonnet | `/tests/**` | `/tests/specs/**` + `healing-session.json` | Playwright MCP |
+| Healer | sonnet | `/tests/**` + `/web-app/src/**` (read) | `/tests/specs/**` + `healing-session.json` | grep, git diff |
 
 **`/web-app/` is NEVER modified by any agent.**
 
