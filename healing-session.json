@@ -1,0 +1,90 @@
+{
+  "sessionId": "heal-2026-03-02T00:00:00.000Z",
+  "createdAt": "2026-03-02T00:00:00.000Z",
+  "updatedAt": "2026-03-02T00:00:00.000Z",
+  "status": "in_progress",
+  "branches": {
+    "appBranch": "v1.1",
+    "testBranch": "main"
+  },
+  "summary": {
+    "totalTests": 8,
+    "passed": 3,
+    "failed": 5,
+    "healable": 4,
+    "regressions": 1,
+    "environmentIssues": 0,
+    "healed": 0,
+    "stillFailing": 0
+  },
+  "failures": [
+    {
+      "id": "fail-001",
+      "testFile": "specs/dashboard.spec.ts",
+      "testName": "Dashboard › shows correct total amount",
+      "classification": "REGRESSION",
+      "errorMessage": "Error: expect(locator).toContainText(expected) failed\n\nLocator: getByTestId('transaction-total')\nExpected substring: \"$1,250.00\"\nReceived string:    \"Total$1,100.00\"\nTimeout: 5000ms\n\nCall log:\n  - Expect \"toContainText\" with timeout 5000ms\n  - waiting for getByTestId('transaction-total')\n    9 × locator resolved to <tr data-testid=\"transaction-total\" class=\"bg-gray-50 font-semibold\">…</tr>\n      - unexpected value \"Total$1,100.00\"",
+      "brokenLocator": null,
+      "healerStatus": "skipped",
+      "fixApplied": "REGRESSION — not healed. Element was found but shows $1,100.00 instead of expected $1,250.00. This is a data/calculation bug in the app.",
+      "newLocator": null,
+      "healedAt": null
+    },
+    {
+      "id": "fail-002",
+      "testFile": "specs/login.spec.ts",
+      "testName": "Login › successful login with valid credentials",
+      "classification": "LOCATOR_CHANGE",
+      "errorMessage": "Test timeout of 15000ms exceeded.\n\nError: locator.click: Test timeout of 15000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: 'Sign In' })",
+      "brokenLocator": "getByRole('button', { name: 'Sign In' })",
+      "healerStatus": "healed",
+      "fixApplied": "getByRole('button', { name: 'Sign In' }) → getByRole('button', { name: 'Log In' })",
+      "newLocator": "getByRole('button', { name: 'Log In' })",
+      "healedAt": "2026-03-02T00:00:00.000Z"
+    },
+    {
+      "id": "fail-003",
+      "testFile": "specs/login.spec.ts",
+      "testName": "Login › shows error with invalid credentials",
+      "classification": "LOCATOR_CHANGE",
+      "errorMessage": "Test timeout of 15000ms exceeded.\n\nError: locator.click: Test timeout of 15000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: 'Sign In' })",
+      "brokenLocator": "getByRole('button', { name: 'Sign In' })",
+      "healerStatus": "healed",
+      "fixApplied": "getByRole('button', { name: 'Sign In' }) → getByRole('button', { name: 'Log In' })",
+      "newLocator": "getByRole('button', { name: 'Log In' })",
+      "healedAt": "2026-03-02T00:00:00.000Z"
+    },
+    {
+      "id": "fail-004",
+      "testFile": "specs/settings.spec.ts",
+      "testName": "Settings › can toggle dark mode",
+      "classification": "LOCATOR_CHANGE",
+      "errorMessage": "Error: expect(locator).not.toBeChecked() failed\n\nLocator: getByTestId('dark-mode-toggle')\nExpected: not checked\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"not toBeChecked\" with timeout 5000ms\n  - waiting for getByTestId('dark-mode-toggle')",
+      "brokenLocator": "getByTestId('dark-mode-toggle')",
+      "healerStatus": "healed",
+      "fixApplied": "getByTestId('dark-mode-toggle') → getByRole('checkbox', { name: 'Dark Mode' })",
+      "newLocator": "getByRole('checkbox', { name: 'Dark Mode' })",
+      "healedAt": "2026-03-02T00:00:00.000Z"
+    },
+    {
+      "id": "fail-005",
+      "testFile": "specs/settings.spec.ts",
+      "testName": "Settings › can update display name and save",
+      "classification": "LOCATOR_CHANGE",
+      "errorMessage": "Test timeout of 15000ms exceeded.\n\nError: locator.click: Test timeout of 15000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: 'Save Changes' })",
+      "brokenLocator": "getByRole('button', { name: 'Save Changes' })",
+      "healerStatus": "healed",
+      "fixApplied": "getByRole('button', { name: 'Save Changes' }) → getByRole('button', { name: 'Save' })",
+      "newLocator": "getByRole('button', { name: 'Save' })",
+      "healedAt": "2026-03-02T00:00:00.000Z"
+    }
+  ],
+  "humanReviewRequired": [
+    {
+      "id": "fail-001",
+      "testFile": "specs/dashboard.spec.ts",
+      "testName": "Dashboard › shows correct total amount",
+      "reason": "REGRESSION: Element found but value mismatch. Expected $1,250.00 but received $1,100.00. This indicates a calculation bug in the app, not a locator issue."
+    }
+  ]
+}
