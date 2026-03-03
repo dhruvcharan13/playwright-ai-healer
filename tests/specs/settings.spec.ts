@@ -9,7 +9,7 @@ test.describe('Settings', () => {
   })
 
   test('can toggle dark mode', async ({ page }) => {
-    const toggle = page.getByTestId('theme-toggle')
+    const toggle = page.getByTestId('dark-mode-toggle')
     await expect(toggle).not.toBeChecked()
     await toggle.check()
     await expect(toggle).toBeChecked()
@@ -17,7 +17,7 @@ test.describe('Settings', () => {
 
   test('can update display name and save', async ({ page }) => {
     await page.getByLabel('Display Name').fill('New Name')
-    await page.getByRole('button', { name: 'Save' }).click()
+    await page.getByRole('button', { name: 'Save Changes' }).click()
     await expect(page.getByRole('status')).toContainText('saved')
   })
 })
